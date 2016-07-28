@@ -124,12 +124,12 @@ void LoadConfig( void ){
 		}
 		
 	}catch( CK15LPError& err ){
-		fclose( fp );
+		if( fp ) fclose( fp );
 		delete [] szFileName;
 		throw err;
 	}
 	
-	fclose( fp );
+	if( fp ) fclose( fp );
 	delete [] szFileName;
 }
 
@@ -206,6 +206,11 @@ int WINAPI _tWinMain(
 	HWND		hWnd;
 	MSG			Msg;
 	WNDCLASS	wcl;
+	
+	/* close if already executed */
+	if( hWnd = FindWindow( szWinClassName, NULL )){
+		PostMessage( hWnd, WM_CLOSE, 0, 0 );
+	}
 	
 	/*** cleate a window ****************************************************/
 	
