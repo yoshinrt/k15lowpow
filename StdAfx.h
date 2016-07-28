@@ -6,3 +6,5 @@
 #include "OlsApi.h"
 #include "OlsDef.h"
 #include "dds.h"
+
+typedef uint64_t	QWORD;
