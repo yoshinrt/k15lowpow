@@ -38,37 +38,37 @@ void InitWinRing0( void ){
 	if (dllStatus!=0) {
 		switch (dllStatus) {
 			case OLS_DLL_UNSUPPORTED_PLATFORM:
-				throw CK15LPError( "WinRing0: unsupported platform\n" );
+				throw CError( "WinRing0: unsupported platform\n" );
 				break;
 			case OLS_DLL_DRIVER_NOT_LOADED:
-				throw CK15LPError( "WinRing0: driver not loaded\n" );
+				throw CError( "WinRing0: driver not loaded\n" );
 				break;
 			case OLS_DLL_DRIVER_NOT_FOUND:
-				throw CK15LPError( "WinRing0: driver not found\n" );
+				throw CError( "WinRing0: driver not found\n" );
 				break;
 			case OLS_DLL_DRIVER_UNLOADED:
-				throw CK15LPError( "WinRing0: driver unloaded by other process\n" );
+				throw CError( "WinRing0: driver unloaded\n" );
 				break;
 			case OLS_DLL_DRIVER_NOT_LOADED_ON_NETWORK:
-				throw CK15LPError( "WinRing0: driver not loaded from network\n" );
+				throw CError( "WinRing0: driver not loaded from network\n" );
 				break;
 		//	case OLS_DLL_UNKNOWN_ERROR:
-		//		throw CK15LPError( "WinRing0: unknown error\n" );
+		//		throw CError( "WinRing0: unknown error\n" );
 		//		break;
 			default:
-				throw CK15LPError( "WinRing0: unknown error\n" );
+				throw CError( "WinRing0: unknown error\n" );
 		}
 	}
 	
 	GetDriverVersion (&verMajor,&verMinor,&verRevision,&verRelease);
 	
 	if( !((verMajor>=1) && (verMinor>=2)))
-		throw CK15LPError( "WinRing0: version 1.2 or later required\n" );
+		throw CError( "WinRing0: version 1.2 or later required\n" );
 }
 
-int CloseWinRing0 () {
-	DeinitializeOls ();	
-	return TRUE;
+int CloseWinRing0(){
+	DeinitializeOls();
+	return true;
 }
 
 /*** Load config file *******************************************************/
@@ -82,8 +82,9 @@ bool GetUintConfig( const char *szBuf, const char *szName, UINT& val ){
 }
 
 void LoadConfig( void ){
-	TCHAR	*szFileName = new TCHAR[ _tcslen( g_lpCmdLine ) + 1 ];
-	char	szBuf[ BUF_SIZE ];
+	std::unique_ptr<TCHAR []>	szFileName( new TCHAR[ _tcslen( g_lpCmdLine ) + 1 ]);
+	std::unique_ptr<char []>	szBuf( new char[ BUF_SIZE ]);
+	
 	TCHAR	*szParam = g_lpCmdLine;
 	FILE	*fp = NULL;
 	
@@ -100,19 +101,19 @@ void LoadConfig( void ){
 	
 	try{
 		// ファイル名 get
-		if( StrGetParam( szFileName, &szParam ) == NULL ) throw CK15LPError( "Error: config file not specified" );
+		if( StrGetParam( szFileName.get(), &szParam ) == NULL ) throw CError( "Error: config file not specified" );
 		
 		// ファイルオープン
-		if(( fp = _tfopen( szFileName, _T( "r" ))) == NULL ) throw CK15LPError( "Error: can't open file" );
+		if(( fp = _tfopen( szFileName.get(), _T( "r" ))) == NULL ) throw CError( "Error: can't open file" );
 		
-		while( fgets( szBuf, BUF_SIZE - 1, fp )){
-			if( GetUintConfig( szBuf, "[Pstate_", uPState )){
+		while( fgets( szBuf.get(), BUF_SIZE - 1, fp )){
+			if( GetUintConfig( szBuf.get(), "[Pstate_", uPState )){
 				uPStateConfFlag = 0;
-			}else if( GetUintConfig( szBuf, "fid=", uFid )){
+			}else if( GetUintConfig( szBuf.get(), "fid=", uFid )){
 				uPStateConfFlag |= PSF_FID;
-			}else if( GetUintConfig( szBuf, "did=", uDid )){
+			}else if( GetUintConfig( szBuf.get(), "did=", uDid )){
 				uPStateConfFlag |= PSF_DID;
-			}else if( GetUintConfig( szBuf, "vid=", uVid )){
+			}else if( GetUintConfig( szBuf.get(), "vid=", uVid )){
 				uPStateConfFlag |= PSF_VID;
 			}
 			
@@ -123,24 +124,22 @@ void LoadConfig( void ){
 			}
 		}
 		
-	}catch( CK15LPError& err ){
+	}catch( CError& err ){
 		if( fp ) fclose( fp );
-		delete [] szFileName;
 		throw err;
 	}
 	
 	if( fp ) fclose( fp );
-	delete [] szFileName;
 }
 
 /*** H/W control ************************************************************/
 
 #define ID_TIMER	0
 
-bool Init( void ){
+bool Init( bool bRestart = false ){
 	try{
-		InitWinRing0();
-		if( !CProcessor::IsSupported()) throw( "Error: unsupported CPU" );
+		if( !bRestart ) InitWinRing0();
+		if( !CProcessor::IsSupported()) throw CError( "Error: unsupported CPU" );
 		
 		g_pCpu = new CProcessor();
 		g_pCpu->Init();
@@ -148,16 +147,18 @@ bool Init( void ){
 		g_pCpu->PowerManagementInit();
 		SetTimer( g_hWnd, ID_TIMER, g_uTimerInterval, NULL );
 		
-	}catch( CK15LPError& err ){
-		MessageBoxA( NULL, err.what(), "k15lowpow", MB_ICONSTOP | MB_OK );
+	}catch( CError& err ){
+		std::unique_ptr<char []> szBuf( new char[ BUF_SIZE ]);
+		
+		MessageBoxA( NULL, err.what( szBuf.get(), BUF_SIZE ), "k15lowpow", MB_ICONSTOP | MB_OK );
 		return false;
 	}
 	
 	return true;
 }
 
-void DeInit( void ){
-	delete g_pCpu;
+void DeInit( bool bRestart = false ){
+	if( !bRestart ) delete g_pCpu;
 	CloseWinRing0();
 }
 
@@ -178,8 +179,10 @@ LRESULT CALLBACK WindowProc(
 		g_pCpu->PowerManagement();
 		
 	  Case WM_POWERBROADCAST:
-		DeInit();
-		if( !Init()) PostQuitMessage( 1 );
+		if( wParam == PBT_APMRESUMEAUTOMATIC ){
+			DeInit( true );
+			if( !Init( true )) PostQuitMessage( 1 );
+		}
 		
 	  Case WM_DESTROY:				/* terminated by user					*/
 		DeInit();
@@ -242,8 +245,8 @@ int WINAPI _tWinMain(
 		WS_OVERLAPPEDWINDOW,
 		CW_USEDEFAULT,			// x
 		CW_USEDEFAULT,			// y
-		320, //CW_USEDEFAULT,			// w
-		240, //CW_USEDEFAULT,			// h
+		320, //CW_USEDEFAULT,	// w
+		240, //CW_USEDEFAULT,	// h
 		HWND_DESKTOP,
 		NULL,
 		hInst,

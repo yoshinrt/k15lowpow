@@ -118,15 +118,13 @@ void CProcessor::Init( void ){
 /*** setup P-State **********************************************************/
 
 void CProcessor::SetupPState( UINT uPState, UINT uFid, UINT uDid, UINT uVid ){
-	for( UINT u = 0; u < m_uCoreNum; ++u ){
-		QWORD dat = ReadMSR64p( u, MSR_CORE_COF + uPState );
-		
-		dat = SetBits( dat, 9, 8, ( QWORD )uVid );
-		dat = SetBits( dat, 6, 2, ( QWORD )uDid );
-		dat = SetBits( dat, 0, 5, ( QWORD )uFid );
-		
-		WriteMSRp( u, MSR_CORE_COF + uPState, dat );
-	}
+	QWORD dat = ReadMSR64( MSR_CORE_COF + uPState );
+	
+	dat = SetBits( dat, 9, 8, ( QWORD )uVid );
+	dat = SetBits( dat, 6, 2, ( QWORD )uDid );
+	dat = SetBits( dat, 0, 5, ( QWORD )uFid );
+	
+	WriteMSR( MSR_CORE_COF + uPState, dat );
 }
 
 /*** power management *******************************************************/
@@ -150,22 +148,28 @@ void CProcessor::PowerManagementInit( void ){
 		m_puFreq[ u ] = uP0Freq * 1024 / m_puFreq[ u ];
 	}
 	
+	#define PERF_CTRL_VAL ( \
+		( 1LL << 22 ) | /* enable			*/ \
+		( 3LL << 16 ) |	/* count os & user	*/ \
+		0x76			/* !Idle Counter	*/ \
+	)
+	
 	// Perf 空きスロット検索
 	for( u = 0; u < m_uMaxPerfSlot; ++u ){
 		for( v = 0; v < m_uCoreNum; ++v ){
+			
+			QWORD val = ReadMSRp( v, m_dwPerfEventSelAddr + u * m_dwPerfSlotOffs );
+			
 			// 使用されていたら break
-			if( ReadMSRp(
-				v, m_dwPerfEventSelAddr + u * m_dwPerfSlotOffs ) & ( 1 << 22 )
-			){
-				break;
-			}
+			// または もともと PERF 計測している設定値でなければ break
+			if( val & ( 1 << 22 ) && val != PERF_CTRL_VAL ) break;
 		}
 		
 		// 全 CPU 分開いていたら break
 		if( v == m_uCoreNum ) break;
 	}
 	
-	if( u == m_uMaxPerfSlot ) throw CK15LPError( "No free performance counter slot" );
+	if( u == m_uMaxPerfSlot ) throw CError( "No free performance counter slot" );
 	
 	m_uPerfSlot = u;
 	DebugMsgD( _T( "Free perf slot #%d\n" ), m_uPerfSlot );
@@ -175,9 +179,7 @@ void CProcessor::PowerManagementInit( void ){
 		WriteMSRp(
 			u,
 			m_dwPerfEventSelAddr + m_uPerfSlot * m_dwPerfSlotOffs,
-			( 1LL << 22 ) | // enable
-			( 3LL << 16 ) |	// count os & user
-			0x76			// !Idle Counter
+			PERF_CTRL_VAL
 		);
 	}
 	

@@ -11,23 +11,55 @@
 #define MSR_CORE_COF	0xC0010064
 
 #define PCI_ADDR( dev, func )	(( dev << 3 ) | func )
-#define PCI_HT_CONFIG		PCI_ADDR( 0x18, 0 )
-#define PCI_PSTATE_LIMIT	PCI_ADDR( 0x18, 3 )
-#define PCI_BOOST_CTRL		PCI_ADDR( 0x18, 4 )
+#define PCI_HT_CONFIG			PCI_ADDR( 0x18, 0 )
+#define PCI_PSTATE_LIMIT		PCI_ADDR( 0x18, 3 )
+#define PCI_BOOST_CTRL			PCI_ADDR( 0x18, 4 )
 
-class CK15LPError : public std::logic_error {
+#define MSG_R_CPUID		"Error: read CPUID(0x%08X)"
+#define MSG_R_MSR		"Error: read MSR(0x%08X)"
+#define MSG_W_MSR		"Error: write MSR(0x%08X)"
+#define MSG_R_PCI		"Error: read PCI(D%X F%X Reg%X)"
+#define MSG_W_PCI		"Error: write PCI(D%X F%X Reg%X)"
+
+class CError : public std::logic_error {
   public:
-	CK15LPError( const char *message ) :
-		std::logic_error( message ){};
+	CError( const char *message ) : std::logic_error( message ){};
+	
+	virtual const char *what( char *szBuf, size_t size ){
+		return std::logic_error::what();
+	}
 };
 
-class CK15LPHwErr : public CK15LPError {
+class CErrorHw : public CError {
   public:
-	CK15LPHwErr( const char *message, uint64_t uData ) :
-		CK15LPError( message ), m_uData( uData ){};
+	CErrorHw( const char *message, uint32_t uData ) :
+		CError( message ), m_uData( uData ){};
+	
+	const char *what( char *szBuf, size_t size ){
+		sprintf_s( szBuf, size, std::logic_error::what(), m_uData );
+		return szBuf;
+	}
 	
   private:
-	uint64_t	m_uData;
+	uint32_t	m_uData;
+};
+
+class CErrorPCI : public CError {
+  public:
+	CErrorPCI( const char *message, uint32_t uData1, uint32_t uData2 ) :
+		CError( message ), m_uData1( uData1 ), m_uData2( uData2 ){};
+	
+	const char *what( char *szBuf, size_t size ){
+		sprintf_s(
+			szBuf, size, std::logic_error::what(),
+			m_uData1 >> 3, m_uData1 & 0x7, m_uData2
+		);
+		return szBuf;
+	}
+	
+  private:
+	uint32_t	m_uData1;
+	uint32_t	m_uData2;
 };
 
 class CProcessor {
@@ -83,7 +115,7 @@ class CProcessor {
 		DWORD& edx
 	){
 		if( !::Cpuid( index, &eax, &ebx, &ecx, &edx )){
-			throw( CK15LPHwErr( "CPUID", index ));
+			throw( CErrorHw( MSG_R_CPUID, index ));
 		}
 		return eax;
 	}
@@ -94,7 +126,7 @@ class CProcessor {
 	){
 		DWORD dwReg[ 4 ];
 		if( !::Cpuid( index, &dwReg[ 0 ], &dwReg[ 1 ], &dwReg[ 2 ], &dwReg[ 3 ])){
-			throw( CK15LPHwErr( "CPUID", index ));
+			throw( CErrorHw( MSG_R_CPUID, index ));
 		}
 		return dwReg[ uReg ];
 	}
@@ -106,7 +138,7 @@ class CProcessor {
 		DWORD val;
 		
 		if( !::ReadPciConfigDwordEx( pciAddress, regAddress, &val )){
-			throw( CK15LPHwErr( "PCI", (( uint64_t )pciAddress << 32 | regAddress )));
+			throw( CErrorPCI( MSG_R_PCI, pciAddress, regAddress ));
 		}
 		
 		return val;
@@ -118,7 +150,7 @@ class CProcessor {
 		DWORD val
 	){
 		if( !::WritePciConfigDwordEx( pciAddress, regAddress, val )){
-			throw( CK15LPHwErr( "Write PCI", (( uint64_t )pciAddress << 32 | regAddress )));
+			throw( CErrorPCI( MSG_W_PCI, pciAddress, regAddress ));
 		}
 	}
 	
@@ -128,7 +160,7 @@ class CProcessor {
 	){
 		DWORD eax, edx;
 		if( !::Rdmsr( index, &eax, &edx )){
-			throw( CK15LPHwErr( "Read MSR", index ));
+			throw( CErrorHw( MSG_R_MSR, index ));
 		}
 		return uReg == REG_EAX ? eax : edx;
 	}
@@ -140,9 +172,19 @@ class CProcessor {
 	){
 		DWORD eax, edx;
 		if( !::RdmsrPx( index, &eax, &edx, ( DWORD_PTR )1 << uCoreId )){
-			throw( CK15LPHwErr( "Read MSR", index ));
+			throw( CErrorHw( MSG_R_MSR, index ));
 		}
 		return uReg == REG_EAX ? eax : edx;
+	}
+	
+	static QWORD ReadMSR64(
+		DWORD	index
+	){
+		QWORD val;
+		if( !::Rdmsr( index, (( DWORD *)&val ), (( DWORD *)&val ) + 1 )){
+			throw( CErrorHw( MSG_R_MSR, index ));
+		}
+		return val;
 	}
 	
 	static QWORD ReadMSR64p(
@@ -151,7 +193,7 @@ class CProcessor {
 	){
 		QWORD val;
 		if( !::RdmsrPx( index, (( DWORD *)&val ), (( DWORD *)&val ) + 1, ( DWORD_PTR )1 << uCoreId )){
-			throw( CK15LPHwErr( "Read MSR", index ));
+			throw( CErrorHw( MSG_R_MSR, index ));
 		}
 		return val;
 	}
@@ -161,7 +203,7 @@ class CProcessor {
 		QWORD val
 	){
 		if( !::Wrmsr( index, ( DWORD )val, ( DWORD )( val >> 32 ))){
-			throw( CK15LPHwErr( "Write MSR", index ));
+			throw( CErrorHw( MSG_W_MSR, index ));
 		}
 	}
 	
@@ -171,7 +213,7 @@ class CProcessor {
 		QWORD val
 	){
 		if( !::WrmsrPx( index, ( DWORD )val, ( DWORD )( val >> 32 ), ( DWORD_PTR )1 << uCoreId )){
-			throw( CK15LPHwErr( "Write MSR", index ));
+			throw( CErrorHw( MSG_W_MSR, index ));
 		}
 	}
 	
