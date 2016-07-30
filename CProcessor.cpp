@@ -37,6 +37,12 @@ CProcessor::~CProcessor(){
 	delete [] m_puVid;
 	delete [] m_puFreq;
 	
+	// PStateLimit 解除
+	SetPStateLimit( 0 );
+	
+	// HwP6 を初期値に戻す
+	WriteFreqAutoVID( m_puFreq[ m_uMaxPState - 2 ]);
+	
 	// perf slot 解放
 	if( m_uPerfSlot != -1 ){
 		for( UINT u = 0; u < m_uCoreNum; ++u ){
@@ -47,9 +53,6 @@ CProcessor::~CProcessor(){
 			);
 		}
 	}
-	
-	// PStateLimit 解除
-	SetPStateLimit( 0 );
 }
 
 /*** CPU check **************************************************************/
@@ -242,7 +245,7 @@ void CProcessor::PowerManagementInit( void ){
 	/************************************************************************/
 	
 	if( m_uApmMode == APM_SMOOTH ){
-		SetPStateLimit( m_uMaxPState - 1 );	// HwP6
+		SetPStateLimit( m_uMaxPState - 2 );	// HwP6
 		m_uCurrentFreq = GetSwPStateFreq( 0 );	// SwP0
 	}
 	
@@ -270,6 +273,11 @@ void CProcessor::WriteFreqAutoVID( UINT uFreq ){
 	UINT uActFreq = GetFreqByFDID( uFid, uDid );
 	UINT uVid = GetVIDByFreq( uActFreq );
 	
+	/*
+	SetPStateLimit( m_uMaxPState - 1 );
+	WritePState( m_uMaxPState - 2, uFid, uDid, uVid );
+	SetPStateLimit( m_uMaxPState - 2 );
+	*/
 	DebugMsgD( _T( "F:%4d->%4d %.5f  " ), m_uCurrentFreq, uActFreq, GetVCoreByVID( uVid ));
 	
 	m_uCurrentFreq = uActFreq;
