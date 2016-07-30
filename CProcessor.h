@@ -83,6 +83,14 @@ class CProcessor {
 		return m_pqwPerfCnt[ m_uPerfCntBuf ^ 1 ][ uPState ];
 	}
 	
+	void SetTargetLoad( UINT uLoad ){
+		m_uTargetLoad = ( uLoad << 20 ) / 100;
+	}
+	
+	void SetFullpowLoad( UINT uLoad ){
+		m_uFullpowLoad = ( uLoad << 10 ) / 100;
+	}
+	
 	void SetupPState( UINT uPState, UINT uFid, UINT uDid, UINT uVid );
 	
 	/*** utils **************************************************************/
@@ -218,20 +226,20 @@ class CProcessor {
 	}
 	
   private:
-	QWORD	m_qwPrevTsc;
-	QWORD	*m_pqwPerfCnt[ 2 ];
-	UINT	*m_puFreq;
-	
-	DWORD	m_dwPerfEventSelAddr;
-	DWORD	m_dwPerfEventCntAddr;
-	DWORD	m_dwPerfSlotOffs;
-	UINT	m_uMaxPerfSlot;
-	UINT	m_uMaxPState;
-	UINT	m_uBoostStateNum;
-	
-	UINT	m_uPerfCntBuf;
-	UINT	m_uPerfSlot;
-	UINT	m_uPStateLimit;
-	UINT	m_uNodeNum;
-	UINT	m_uCoreNum;
+	QWORD	m_qwPrevTsc;			// 直前の TSC
+	QWORD	*m_pqwPerfCnt[ 2 ];		// 直前の Perf カウンタ
+	UINT	*m_puFreq;				// PState 毎の周波数の，P0/Pn*1024
+	DWORD	m_dwPerfEventSelAddr;	// PERF 制御 reg アドレス
+	DWORD	m_dwPerfEventCntAddr;	// PERF カウンタ reg アドレス
+	DWORD	m_dwPerfSlotOffs;		// PERF スロット増分
+	UINT	m_uMaxPerfSlot;			// PERF スロット数
+	UINT	m_uMaxPState;			// PState 数
+	UINT	m_uBoostStateNum;		// ブーストステート数
+	UINT	m_uPerfCntBuf;			// PERF 計測 buf ptr
+	UINT	m_uPerfSlot;			// PERF 計測に使用する slot
+	UINT	m_uPStateLimit;			// PState 上限
+	UINT	m_uNodeNum;				// ノード数
+	UINT	m_uCoreNum;				// Core 数
+	UINT	m_uTargetLoad;			// 目標負荷 << 20
+	UINT	m_uFullpowLoad;			// フルパワーに移行する負荷 << 10
 };

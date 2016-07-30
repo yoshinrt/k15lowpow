@@ -91,6 +91,7 @@ void LoadConfig( void ){
 	UINT	uPState = 0;
 	UINT	uPStateConfFlag = 0;
 	UINT	uFid, uVid, uDid;
+	UINT	u;
 	
 	enum{
 		PSF_FID	= 1 << 0,
@@ -104,7 +105,7 @@ void LoadConfig( void ){
 		if( StrGetParam( szFileName.get(), &szParam ) == NULL ) throw CError( "Error: config file not specified" );
 		
 		// ファイルオープン
-		if(( fp = _tfopen( szFileName.get(), _T( "r" ))) == NULL ) throw CError( "Error: can't open file" );
+		if( _tfopen_s( &fp, szFileName.get(), _T( "r" ))) throw CError( "Error: can't open file" );
 		
 		while( fgets( szBuf.get(), BUF_SIZE - 1, fp )){
 			if( GetUintConfig( szBuf.get(), "[Pstate_", uPState )){
@@ -115,7 +116,14 @@ void LoadConfig( void ){
 				uPStateConfFlag |= PSF_DID;
 			}else if( GetUintConfig( szBuf.get(), "vid=", uVid )){
 				uPStateConfFlag |= PSF_VID;
+			}else if( GetUintConfig( szBuf.get(), "TargetLoad=", u )){
+				g_pCpu->SetTargetLoad( u );
+			}else if( GetUintConfig( szBuf.get(), "FullpowerLoad=", u )){
+				g_pCpu->SetFullpowLoad( u );
 			}
+			else if(
+				GetUintConfig( szBuf.get(), "Interval=", g_uTimerInterval )
+			);
 			
 			if( uPStateConfFlag == PSF_ALL ){
 				DebugMsgD( _T( "P%d: f:%d d:%d v:%d\n" ), uPState, uFid, uDid, uVid );

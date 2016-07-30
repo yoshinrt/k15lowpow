@@ -24,6 +24,9 @@ CProcessor::CProcessor(){
 	m_uPerfCntBuf		= 0;
 	m_uPerfSlot			= -1;
 	m_uPStateLimit		= 0;
+	
+	SetTargetLoad( 70 );
+	SetFullpowLoad( 90 );
 }
 
 CProcessor::~CProcessor(){
@@ -221,16 +224,14 @@ void CProcessor::PowerManagement( void ){
 	UINT uActualLoad = uMaxLoad * m_puFreq[ m_uBoostStateNum + m_uPStateLimit ] / 1024;
 	
 	// 95% load で P0 へ
-	if( uActualLoad > ( UINT )( 0.9 * 1024 )){
+	if( uActualLoad > m_uFullpowLoad ){
 		m_uPStateLimit = 0;
 	}
 	
 	// 80% を超えない PState を求める
 	else{
 		for( u = m_uMaxPState - 1; u > m_uBoostStateNum; --u ){
-			if(
-				uMaxLoad * m_puFreq[ u ] < ( UINT )( 0.8 * 1024 * 1024 )
-			) break;
+			if( uMaxLoad * m_puFreq[ u ] < m_uTargetLoad ) break;
 		}
 		m_uPStateLimit = u - m_uBoostStateNum;
 	}
