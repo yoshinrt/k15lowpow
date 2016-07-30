@@ -69,7 +69,7 @@ class CProcessor {
 	
 	void Init( void );
 	void ReadPerfCnt( void );
-	UINT GetFreq( UINT uPState );
+	UINT ReadFreq( UINT uPState );
 	void SetPStateLimit( UINT uPState );
 	void PowerManagementInit( void );
 	void PowerManagement( void );
@@ -91,7 +91,7 @@ class CProcessor {
 		m_uFullpowLoad = ( uLoad << 10 ) / 100;
 	}
 	
-	void SetupPState( UINT uPState, UINT uFid, UINT uDid, UINT uVid );
+	void WritePState( UINT uPState, UINT uFid, UINT uDid, UINT uVid );
 	
 	/*** utils **************************************************************/
 	
@@ -229,6 +229,7 @@ class CProcessor {
 	QWORD	m_qwPrevTsc;			// 直前の TSC
 	QWORD	*m_pqwPerfCnt[ 2 ];		// 直前の Perf カウンタ
 	UINT	*m_puFreq;				// PState 毎の周波数の，P0/Pn*1024
+	UINT	*m_puVid;				// PState 毎の VID
 	DWORD	m_dwPerfEventSelAddr;	// PERF 制御 reg アドレス
 	DWORD	m_dwPerfEventCntAddr;	// PERF カウンタ reg アドレス
 	DWORD	m_dwPerfSlotOffs;		// PERF スロット増分

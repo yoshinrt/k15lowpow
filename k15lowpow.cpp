@@ -127,7 +127,7 @@ void LoadConfig( void ){
 			
 			if( uPStateConfFlag == PSF_ALL ){
 				DebugMsgD( _T( "P%d: f:%d d:%d v:%d\n" ), uPState, uFid, uDid, uVid );
-				g_pCpu->SetupPState( uPState, uFid, uDid, uVid );
+				g_pCpu->WritePState( uPState, uFid, uDid, uVid );
 				uPStateConfFlag = 0;
 			}
 		}

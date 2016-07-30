@@ -21,6 +21,7 @@ CProcessor::CProcessor(){
 	m_pqwPerfCnt[ 0 ]	= NULL;
 	m_pqwPerfCnt[ 1 ]	= NULL;
 	m_puFreq			= NULL;
+	m_puVid				= NULL;
 	m_uPerfCntBuf		= 0;
 	m_uPerfSlot			= -1;
 	m_uPStateLimit		= 0;
@@ -32,7 +33,8 @@ CProcessor::CProcessor(){
 CProcessor::~CProcessor(){
 	delete [] m_pqwPerfCnt[ 0 ];
 	delete [] m_pqwPerfCnt[ 1 ];
-	delete m_puFreq;
+	delete [] m_puVid;
+	delete [] m_puFreq;
 	
 	// perf slot 解放
 	if( m_uPerfSlot != -1 ){
@@ -91,7 +93,7 @@ void CProcessor::ReadPerfCnt( void ){
 
 /*** FID/DID/VID ************************************************************/
 
-UINT CProcessor::GetFreq( UINT uPState ){
+UINT CProcessor::ReadFreq( UINT uPState ){
 	UINT u = ( UINT )ReadMSR( 0xC0010064 + uPState );
 	return ( 100 * (( GetBits( u, 0, 5 ) + 0x10 ))) >> GetBits( u, 6, 2 );
 }
@@ -120,7 +122,7 @@ void CProcessor::Init( void ){
 
 /*** setup P-State **********************************************************/
 
-void CProcessor::SetupPState( UINT uPState, UINT uFid, UINT uDid, UINT uVid ){
+void CProcessor::WritePState( UINT uPState, UINT uFid, UINT uDid, UINT uVid ){
 	QWORD dat = ReadMSR64( MSR_CORE_COF + uPState );
 	
 	dat = SetBits( dat, 9, 8, ( QWORD )uVid );
@@ -138,7 +140,7 @@ void CProcessor::PowerManagementInit( void ){
 	// 全 PState の freq 取得
 	m_puFreq = new UINT[ m_uMaxPState ];
 	for( u = 0; u < m_uMaxPState; ++u ){
-		m_puFreq[ u ] = GetFreq( u );
+		m_puFreq[ u ] = ReadFreq( u );
 		DebugMsgD( _T( "Freq#%d:%d\n" ), u, m_puFreq[ u ]);
 	}
 	
