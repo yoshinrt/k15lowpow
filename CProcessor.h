@@ -70,7 +70,17 @@ class CProcessor {
 	void Init( void );
 	void ReadPerfCnt( void );
 	UINT ReadFreq( UINT uPState );
+	UINT ReadVID( UINT uPState );
+	
+	UINT GetFreqByFDID( UINT uFid, UINT uDid ){
+		return ( 100 * (( uFid + 0x10 ))) >> uDid;
+	}
+	void GetFDIDByFreq( UINT uTgtFreq, UINT& uFid, UINT& uDid );
+	UINT GetVIDByFreq( UINT uFreq );
+	double GetVCoreByVID( UINT uVid ){ return 1.55 - 0.00625 * uVid; }
+	
 	void SetPStateLimit( UINT uPState );
+	void WriteFreqAutoVID( UINT uFreq );
 	void PowerManagementInit( void );
 	void PowerManagement( void );
 	static bool IsSupported( void );
@@ -84,7 +94,7 @@ class CProcessor {
 	}
 	
 	void SetTargetLoad( UINT uLoad ){
-		m_uTargetLoad = ( uLoad << 20 ) / 100;
+		m_uTargetLoad = ( uLoad << 10 ) / 100;
 	}
 	
 	void SetFullpowLoad( UINT uLoad ){
@@ -92,6 +102,16 @@ class CProcessor {
 	}
 	
 	void WritePState( UINT uPState, UINT uFid, UINT uDid, UINT uVid );
+	
+	UINT GetSwPStateFreq( UINT uPState ){
+		return m_puFreq[ uPState + m_uBoostStateNum ];
+	}
+	
+	UINT GetSwPStateVID( UINT uPState ){
+		return m_puVid[ uPState + m_uBoostStateNum ];
+	}
+	
+	UINT GetActualFreq( UINT uTgtFreq, UINT& uFid, UINT& uVid );
 	
 	/*** utils **************************************************************/
 	
@@ -241,6 +261,13 @@ class CProcessor {
 	UINT	m_uPStateLimit;			// PState 上限
 	UINT	m_uNodeNum;				// ノード数
 	UINT	m_uCoreNum;				// Core 数
-	UINT	m_uTargetLoad;			// 目標負荷 << 20
+	UINT	m_uTargetLoad;			// 目標負荷 << 10
 	UINT	m_uFullpowLoad;			// フルパワーに移行する負荷 << 10
+	UINT	m_uCurrentFreq;
+	
+	enum {
+		APM_PSTATE,					// SwPStateLimit を使用
+		APM_SMOOTH,					// HwP6 に周波数設定
+	};
+	UINT	m_uApmMode;				// PM 方法
 };

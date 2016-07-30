@@ -121,9 +121,9 @@ void LoadConfig( void ){
 			}else if( GetUintConfig( szBuf.get(), "FullpowerLoad=", u )){
 				g_pCpu->SetFullpowLoad( u );
 			}
-			else if(
-				GetUintConfig( szBuf.get(), "Interval=", g_uTimerInterval )
-			);
+			else {
+				GetUintConfig(szBuf.get(), "Interval=", g_uTimerInterval);
+			}
 			
 			if( uPStateConfFlag == PSF_ALL ){
 				DebugMsgD( _T( "P%d: f:%d d:%d v:%d\n" ), uPState, uFid, uDid, uVid );

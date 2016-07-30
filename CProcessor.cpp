@@ -25,6 +25,7 @@ CProcessor::CProcessor(){
 	m_uPerfCntBuf		= 0;
 	m_uPerfSlot			= -1;
 	m_uPStateLimit		= 0;
+	m_uApmMode			= APM_SMOOTH;
 	
 	SetTargetLoad( 70 );
 	SetFullpowLoad( 90 );
@@ -95,7 +96,49 @@ void CProcessor::ReadPerfCnt( void ){
 
 UINT CProcessor::ReadFreq( UINT uPState ){
 	UINT u = ( UINT )ReadMSR( 0xC0010064 + uPState );
-	return ( 100 * (( GetBits( u, 0, 5 ) + 0x10 ))) >> GetBits( u, 6, 2 );
+	return GetFreqByFDID( GetBits( u, 0, 5 ), GetBits( u, 6, 2 ));
+}
+
+UINT CProcessor::ReadVID( UINT uPState ){
+	UINT u = ( UINT )ReadMSR( 0xC0010064 + uPState );
+	return GetBits( u, 9, 8 );
+}
+
+void CProcessor::GetFDIDByFreq( UINT uFreq, UINT& uFid, UINT& uDid ){
+	
+	uDid =	uFreq <= GetFreqByFDID( 0x1F, 4 ) ? 4 :
+			uFreq <= GetFreqByFDID( 0x1F, 3 ) ? 3 :
+			uFreq <= GetFreqByFDID( 0x1F, 2 ) ? 2 :
+			uFreq <= GetFreqByFDID( 0x1F, 1 ) ? 1 : 0;
+	
+	uFid = ((( uFreq << uDid ) + 50/*四捨五入*/ ) / 100 - 0x10 ) & 0x1F;
+}
+
+UINT CProcessor::GetVIDByFreq( UINT uFreq ){
+	UINT u;
+	
+	if( uFreq < m_puFreq[ m_uMaxPState - 1 ] || m_puFreq[ 0 ] < uFreq ){
+		throw CError( "Internal error: Freq out of range" );
+	}
+	
+	for( u = 0; u < m_uMaxPState; ++u ){
+		// ズバリの Freq 発見
+		if( uFreq == m_puFreq[ u ]) return m_puVid[ u ];
+		
+		// 等比分割で VID を求める
+		if( uFreq >= m_puFreq[ u ]){
+			
+			return
+				( int )( m_puVid[ u + 1 ] - m_puVid[ u ]) *
+				( uFreq - m_puFreq[ u ] ) /
+				( m_puFreq[ u + 1 ] - m_puFreq[ u ] ) +
+				m_puVid[ u ];
+		}
+	}
+	
+	// ありえないけど念のため
+	throw CError( "Internal error: Freq out of range" );
+	 return GetSwPStateVID( 0 );
 }
 
 /*** set sw pstate limit ****************************************************/
@@ -137,21 +180,29 @@ void CProcessor::WritePState( UINT uPState, UINT uFid, UINT uDid, UINT uVid ){
 void CProcessor::PowerManagementInit( void ){
 	UINT u, v;
 	
+	/*** PState 値の保存 ****************************************************/
+	
 	// 全 PState の freq 取得
 	m_puFreq = new UINT[ m_uMaxPState ];
+	m_puVid = new UINT[ m_uMaxPState ];
 	for( u = 0; u < m_uMaxPState; ++u ){
-		m_puFreq[ u ] = ReadFreq( u );
+		m_puFreq[ u ]	= ReadFreq( u );
+		m_puVid[ u ]	= ReadVID( u );
 		DebugMsgD( _T( "Freq#%d:%d\n" ), u, m_puFreq[ u ]);
 	}
 	
 	m_uBoostStateNum = GetBits( ReadPCI( PCI_BOOST_CTRL, 0x15C ), 2, 2 );
 	DebugMsgD( _T( "Boost state:%d\n" ), m_uBoostStateNum );
 	
-	// m_puFreq を / 1024 の割合に変換
-	UINT uP0Freq = m_puFreq[ m_uBoostStateNum ];
-	for( u = 0; u < m_uMaxPState; ++u ){
-		m_puFreq[ u ] = uP0Freq * 1024 / m_puFreq[ u ];
+	if( m_uApmMode == APM_PSTATE ){
+		// m_puFreq を / 1024 の割合に変換
+		UINT uP0Freq = GetSwPStateFreq( 0 );
+		for( u = 0; u < m_uMaxPState; ++u ){
+			m_puFreq[ u ] = uP0Freq * 1024 / m_puFreq[ u ];
+		}
 	}
+	
+	/*** performance counter 設定 *******************************************/
 	
 	#define PERF_CTRL_VAL ( \
 		( 1LL << 22 ) | /* enable			*/ \
@@ -188,6 +239,13 @@ void CProcessor::PowerManagementInit( void ){
 		);
 	}
 	
+	/************************************************************************/
+	
+	if( m_uApmMode == APM_SMOOTH ){
+		SetPStateLimit( m_uMaxPState - 1 );	// HwP6
+		m_uCurrentFreq = GetSwPStateFreq( 0 );	// SwP0
+	}
+	
 	// 領域確保
 	m_pqwPerfCnt[ 0 ]	= new QWORD[ m_uCoreNum ];
 	m_pqwPerfCnt[ 1 ]	= new QWORD[ m_uCoreNum ];
@@ -195,6 +253,26 @@ void CProcessor::PowerManagementInit( void ){
 	// perf cnt 初期リード
 	ReadPerfCnt();
 	m_qwPrevTsc = __rdtsc();
+}
+
+void CProcessor::WriteFreqAutoVID( UINT uFreq ){
+	
+	DebugMsgD( _T( "F:%4d  " ), uFreq );
+	
+	if( uFreq > m_puFreq[ 0 ]){
+		uFreq = m_puFreq[ 0 ];
+	}else if( uFreq < m_puFreq[ m_uMaxPState - 1 ]){
+		uFreq = m_puFreq[ m_uMaxPState - 1 ];
+	}
+	
+	UINT uFid, uDid;
+	GetFDIDByFreq( uFreq, uFid, uDid );
+	UINT uActFreq = GetFreqByFDID( uFid, uDid );
+	UINT uVid = GetVIDByFreq( uActFreq );
+	
+	DebugMsgD( _T( "F:%4d->%4d %.5f  " ), m_uCurrentFreq, uActFreq, GetVCoreByVID( uVid ));
+	
+	m_uCurrentFreq = uActFreq;
 }
 
 void CProcessor::PowerManagement( void ){
@@ -222,28 +300,46 @@ void CProcessor::PowerManagement( void ){
 	//DebugMsgD( _T( "\n" ));
 	m_qwPrevTsc = qwTsc;
 	
-	// 現在の PStateLimit での実 load を求める
-	UINT uActualLoad = uMaxLoad * m_puFreq[ m_uBoostStateNum + m_uPStateLimit ] / 1024;
-	
-	// 95% load で P0 へ
-	if( uActualLoad > m_uFullpowLoad ){
-		m_uPStateLimit = 0;
-	}
-	
-	// 80% を超えない PState を求める
-	else{
-		for( u = m_uMaxPState - 1; u > m_uBoostStateNum; --u ){
-			if( uMaxLoad * m_puFreq[ u ] < m_uTargetLoad ) break;
+	if( m_uApmMode == APM_PSTATE ){
+		// 現在の PStateLimit での実 load を求める
+		UINT uActualLoad = uMaxLoad * GetSwPStateFreq( m_uPStateLimit ) / 1024;
+		
+		// 95% load で P0 へ
+		if( uActualLoad > m_uFullpowLoad ){
+			m_uPStateLimit = 0;
 		}
-		m_uPStateLimit = u - m_uBoostStateNum;
+		
+		// 80% を超えない PState を求める
+		else{
+			for( u = m_uMaxPState - 1; u > m_uBoostStateNum; --u ){
+				if( uMaxLoad * m_puFreq[ u ] < m_uTargetLoad * 1024 ) break;
+			}
+			m_uPStateLimit = u - m_uBoostStateNum;
+		}
+		
+		DebugMsgD(
+			_T( "NewP:%d Load:%.1f Act:%.1f Tgt:%.1f\n" ),
+			m_uPStateLimit,
+			uMaxLoad / 10.24, uActualLoad / 10.24,
+			uMaxLoad * GetSwPStateFreq( m_uPStateLimit ) / ( 1024 * 10.24 )
+		);
+		
+		SetPStateLimit( m_uPStateLimit );
+		
+	}else if( m_uApmMode == APM_SMOOTH ){
+		// 現在の Freq での実 load を求める
+		UINT uActualLoad = uMaxLoad * GetSwPStateFreq( 0 ) / m_uCurrentFreq;
+		
+		// 95% load で P0 へ
+		if( uActualLoad > m_uFullpowLoad ){
+			WriteFreqAutoVID( GetSwPStateFreq( 0 ));
+		}else{
+			WriteFreqAutoVID( GetSwPStateFreq( 0 ) * uMaxLoad / m_uTargetLoad );
+		}
+		DebugMsgD(
+			_T( "Load:%.1f Act:%.1f Tgt:%.1f\n" ),
+			uMaxLoad / 10.24, uActualLoad / 10.24,
+			uMaxLoad * GetSwPStateFreq( 0 ) / m_uCurrentFreq / 10.24
+		);
 	}
-	
-	DebugMsgD(
-		_T( "NewP:%d Load:%.1f Act:%.1f Tgt:%.1f\n" ),
-		m_uPStateLimit,
-		uMaxLoad / 10.24, uActualLoad / 10.24,
-		uMaxLoad * m_puFreq[ m_uBoostStateNum + m_uPStateLimit ] / ( 1024 * 10.24 )
-	);
-	
-	SetPStateLimit( m_uPStateLimit );
 }
