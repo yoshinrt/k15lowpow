@@ -120,9 +120,8 @@ void LoadConfig( void ){
 				g_pCpu->SetTargetLoad( u );
 			}else if( GetUintConfig( szBuf.get(), "FullpowerLoad=", u )){
 				g_pCpu->SetFullpowLoad( u );
-			}
-			else {
-				GetUintConfig(szBuf.get(), "Interval=", g_uTimerInterval);
+			}else{
+				GetUintConfig( szBuf.get(), "Interval=", g_uTimerInterval );
 			}
 			
 			if( uPStateConfFlag == PSF_ALL ){
@@ -166,8 +165,8 @@ bool Init( bool bRestart = false ){
 }
 
 void DeInit( bool bRestart = false ){
-	if( !bRestart ) delete g_pCpu;
-	CloseWinRing0();
+	delete g_pCpu;
+	if( !bRestart ) CloseWinRing0();
 }
 
 /*** window procedure *******************************************************/
