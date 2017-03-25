@@ -25,24 +25,21 @@ CProcessor::CProcessor(){
 	m_uPerfCntBuf		= 0;
 	m_uPerfSlot			= -1;
 	m_uPStateLimit		= 0;
-	m_uApmMode			= APM_PSTATE; //APM_SMOOTH;
+	#ifndef NO_SMOOTH_MODE
+		m_uApmMode			= APM_SMOOTH;
+	#endif
 	
 	SetTargetLoad( 70 );
 	SetFullpowLoad( 90 );
 }
 
 CProcessor::~CProcessor(){
-	delete [] m_pqwPerfCnt[ 0 ];
-	delete [] m_pqwPerfCnt[ 1 ];
-	delete [] m_puVid;
-	delete [] m_puFreq;
-	
 	// PStateLimit 解除
 	SetPStateLimit( 0 );
 	
-	// HwP6 を初期値に戻す
+	// HwP7 を初期値に戻す
 	if( m_uApmMode == APM_SMOOTH ){
-		WriteFreqAutoVID( m_puFreq[ m_uMaxPState - 2 ]);
+		WriteFreqAutoVID( m_puFreq[ m_uMaxPState - 1 ]);
 	}
 	
 	// perf slot 解放
@@ -52,6 +49,11 @@ CProcessor::~CProcessor(){
 			0
 		);
 	}
+	
+	delete [] m_pqwPerfCnt[ 0 ];
+	delete [] m_pqwPerfCnt[ 1 ];
+	delete [] m_puVid;
+	delete [] m_puFreq;
 }
 
 /*** CPU check **************************************************************/
@@ -128,13 +130,13 @@ UINT CProcessor::GetVIDByFreq( UINT uFreq ){
 		if( uFreq == m_puFreq[ u ]) return m_puVid[ u ];
 		
 		// 等比分割で VID を求める
-		if( uFreq >= m_puFreq[ u ]){
+		if( uFreq > m_puFreq[ u ]){
 			
 			return
-				( int )( m_puVid[ u + 1 ] - m_puVid[ u ]) *
-				( uFreq - m_puFreq[ u ] ) /
-				( m_puFreq[ u + 1 ] - m_puFreq[ u ] ) +
-				m_puVid[ u ];
+				( int )( m_puVid[ u ] - m_puVid[ u - 1 ]) *
+				( m_puFreq[ u - 1 ] - uFreq ) /
+				( m_puFreq[ u - 1 ] - m_puFreq[ u ]) +
+				m_puVid[ u - 1 ];
 		}
 	}
 	
@@ -168,13 +170,32 @@ void CProcessor::Init( void ){
 /*** setup P-State **********************************************************/
 
 void CProcessor::WritePState( UINT uPState, UINT uFid, UINT uDid, UINT uVid ){
+	DebugMsgD( _T( "f:%4d %.5fV  " ), GetFreqByFDID( uFid, uDid ), GetVCoreByVID( uVid ));
+	
 	QWORD dat = ReadMSR64( MSR_CORE_COF + uPState );
 	
-	dat = SetBits( dat, 9, 8, ( QWORD )uVid );
-	dat = SetBits( dat, 6, 2, ( QWORD )uDid );
-	dat = SetBits( dat, 0, 5, ( QWORD )uFid );
+	// 電圧を上げる場合は，電圧を先に設定
+	if( uVid < GetBits( dat, 9, 8 )){
+		dat = SetBits( dat, 9, 8, ( QWORD )uVid );
+		WriteMSR( MSR_CORE_COF + uPState, dat );
+		Sleep( 10 );
+		dat = SetBits( dat, 6, 2, ( QWORD )uDid );
+		dat = SetBits( dat, 0, 5, ( QWORD )uFid );
+	}else{
+		dat = SetBits( dat, 6, 2, ( QWORD )uDid );
+		dat = SetBits( dat, 0, 5, ( QWORD )uFid );
+		WriteMSR( MSR_CORE_COF + uPState, dat );
+		Sleep( 10 );
+		dat = SetBits( dat, 9, 8, ( QWORD )uVid );
+	}
 	
 	WriteMSR( MSR_CORE_COF + uPState, dat );
+}
+
+void CProcessor::WritePState( UINT uPState, UINT uFreq, UINT uVid ){
+	UINT uFid, uDid;
+	GetFDIDByFreq( uFreq, uFid, uDid );
+	WritePState( uPState, uFid, uDid, uVid );
 }
 
 /*** power management *******************************************************/
@@ -197,7 +218,7 @@ void CProcessor::PowerManagementInit( void ){
 	DebugMsgD( _T( "Boost state:%d\n" ), m_uBoostStateNum );
 	
 	if( m_uApmMode == APM_PSTATE ){
-		// m_puFreq を / 1024 の割合に変換
+		// m_puFreq を P0 / Pn * 1024 に変換
 		UINT uP0Freq = GetSwPStateFreq( 0 );
 		for( u = 0; u < m_uMaxPState; ++u ){
 			m_puFreq[ u ] = uP0Freq * 1024 / m_puFreq[ u ];
@@ -244,8 +265,8 @@ void CProcessor::PowerManagementInit( void ){
 	/************************************************************************/
 	
 	if( m_uApmMode == APM_SMOOTH ){
-		SetPStateLimit( m_uMaxPState - 2 );	// HwP6
-		m_uCurrentFreq = GetSwPStateFreq( 0 );	// SwP0
+		SetPStateLimit( m_uMaxPState - 1 );				// HwP7
+		m_uCurrentFreq = m_puFreq[ m_uMaxPState - 1 ];	// SwP7
 	}
 	
 	// 領域確保
@@ -259,25 +280,20 @@ void CProcessor::PowerManagementInit( void ){
 
 void CProcessor::WriteFreqAutoVID( UINT uFreq ){
 	
-	DebugMsgD( _T( "F:%4d  " ), uFreq );
-	
-	if( uFreq > m_puFreq[ 0 ]){
-		uFreq = m_puFreq[ 0 ];
+	if( uFreq > m_puFreq[ m_uBoostStateNum ]){
+		uFreq = m_puFreq[ m_uBoostStateNum ];
 	}else if( uFreq < m_puFreq[ m_uMaxPState - 1 ]){
 		uFreq = m_puFreq[ m_uMaxPState - 1 ];
 	}
 	
 	UINT uFid, uDid;
 	GetFDIDByFreq( uFreq, uFid, uDid );
-	UINT uActFreq = GetFreqByFDID( uFid, uDid );
-	UINT uVid = GetVIDByFreq( uActFreq );
+	UINT uActFreq	= GetFreqByFDID( uFid, uDid );
+	UINT uVid		= GetVIDByFreq( uActFreq );
 	
-	/*
-	SetPStateLimit( m_uMaxPState - 1 );
-	WritePState( m_uMaxPState - 2, uFid, uDid, uVid );
-	SetPStateLimit( m_uMaxPState - 2 );
-	*/
-	DebugMsgD( _T( "F:%4d->%4d %.5f  " ), m_uCurrentFreq, uActFreq, GetVCoreByVID( uVid ));
+	//SetPStateLimit( m_uMaxPState - 1 );
+	WritePState( m_uMaxPState - 1, uFid, uDid, uVid );	// HwP7
+	//SetPStateLimit( m_uMaxPState - 2 );
 	
 	m_uCurrentFreq = uActFreq;
 }
@@ -319,7 +335,7 @@ void CProcessor::PowerManagement( void ){
 		// 80% を超えない PState を求める
 		else{
 			for( u = m_uMaxPState - 1; u > m_uBoostStateNum; --u ){
-				if( uMaxLoad * m_puFreq[ u ] < m_uTargetLoad ) break;
+				if( uMaxLoad * m_puFreq[ u ] < ( m_uTargetLoad << 10 )) break;
 			}
 			m_uPStateLimit = u - m_uBoostStateNum;
 		}
@@ -337,16 +353,15 @@ void CProcessor::PowerManagement( void ){
 		// 現在の Freq での実 load を求める
 		UINT uActualLoad = uMaxLoad * GetSwPStateFreq( 0 ) / m_uCurrentFreq;
 		
-		// 95% load で P0 へ
+		// 95% load で SwP0 へ
 		if( uActualLoad > m_uFullpowLoad ){
 			WriteFreqAutoVID( GetSwPStateFreq( 0 ));
 		}else{
 			WriteFreqAutoVID( GetSwPStateFreq( 0 ) * uMaxLoad / m_uTargetLoad );
 		}
 		DebugMsgD(
-			_T( "Load:%.1f Act:%.1f Tgt:%.1f\n" ),
-			uMaxLoad / 10.24, uActualLoad / 10.24,
-			uMaxLoad * GetSwPStateFreq( 0 ) / m_uCurrentFreq / 10.24
+			_T( "Load:%5.1f Act:%5.1f\n" ),
+			uMaxLoad / 10.24, uActualLoad / 10.24
 		);
 	}
 }

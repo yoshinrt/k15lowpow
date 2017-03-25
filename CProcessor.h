@@ -6,6 +6,8 @@
 	
 *****************************************************************************/
 
+#define NO_SMOOTH_MODE
+
 #define	CPUID_VENDOR	0x00000000
 #define	CPUID_BRAND		0x00000001
 #define MSR_CORE_COF	0xC0010064
@@ -94,7 +96,7 @@ class CProcessor {
 	}
 	
 	void SetTargetLoad( UINT uLoad ){
-		m_uTargetLoad = ( uLoad << 20 ) / 100;
+		m_uTargetLoad = ( uLoad << 10 ) / 100;
 	}
 	
 	void SetFullpowLoad( UINT uLoad ){
@@ -102,6 +104,7 @@ class CProcessor {
 	}
 	
 	void WritePState( UINT uPState, UINT uFid, UINT uDid, UINT uVid );
+	void WritePState( UINT uPState, UINT uFreq, UINT uVid );
 	
 	UINT GetSwPStateFreq( UINT uPState ){
 		return m_puFreq[ uPState + m_uBoostStateNum ];
@@ -261,13 +264,17 @@ class CProcessor {
 	UINT	m_uPStateLimit;			// PState 上限
 	UINT	m_uNodeNum;				// ノード数
 	UINT	m_uCoreNum;				// Core 数
-	UINT	m_uTargetLoad;			// 目標負荷 << 20
+	UINT	m_uTargetLoad;			// 目標負荷 << 10
 	UINT	m_uFullpowLoad;			// フルパワーに移行する負荷 << 10
 	UINT	m_uCurrentFreq;
 	
 	enum {
 		APM_PSTATE,					// SwPStateLimit を使用
-		APM_SMOOTH,					// HwP6 に周波数設定
+		APM_SMOOTH,					// HwP7 に周波数設定
 	};
-	UINT	m_uApmMode;				// PM 方法
+	#ifdef NO_SMOOTH_MODE
+		#define m_uApmMode	APM_PSTATE
+	#else
+		UINT	m_uApmMode;				// PM 方法
+	#endif
 };

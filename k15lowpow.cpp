@@ -90,14 +90,13 @@ void LoadConfig( void ){
 	
 	UINT	uPState = 0;
 	UINT	uPStateConfFlag = 0;
-	UINT	uFid, uVid, uDid;
+	UINT	uFreq, uVid;
 	UINT	u;
 	
 	enum{
-		PSF_FID	= 1 << 0,
-		PSF_DID = 1 << 1,
-		PSF_VID = 1 << 2,
-		PSF_ALL = ( 1 << 3 ) - 1,
+		PSF_FREQ	= 1 << 0,
+		PSF_VID 	= 1 << 1,
+		PSF_ALL 	= ( 1 << 2 ) - 1,
 	};
 	
 	try{
@@ -110,10 +109,8 @@ void LoadConfig( void ){
 		while( fgets( szBuf.get(), BUF_SIZE - 1, fp )){
 			if( GetUintConfig( szBuf.get(), "[Pstate_", uPState )){
 				uPStateConfFlag = 0;
-			}else if( GetUintConfig( szBuf.get(), "fid=", uFid )){
-				uPStateConfFlag |= PSF_FID;
-			}else if( GetUintConfig( szBuf.get(), "did=", uDid )){
-				uPStateConfFlag |= PSF_DID;
+			}else if( GetUintConfig( szBuf.get(), "freq=", uFreq )){
+				uPStateConfFlag |= PSF_FREQ;
 			}else if( GetUintConfig( szBuf.get(), "vid=", uVid )){
 				uPStateConfFlag |= PSF_VID;
 			}else if( GetUintConfig( szBuf.get(), "TargetLoad=", u )){
@@ -125,8 +122,8 @@ void LoadConfig( void ){
 			}
 			
 			if( uPStateConfFlag == PSF_ALL ){
-				DebugMsgD( _T( "P%d: f:%d d:%d v:%d\n" ), uPState, uFid, uDid, uVid );
-				g_pCpu->WritePState( uPState, uFid, uDid, uVid );
+				DebugMsgD( _T( "P%d: f:%d v:%d\n" ), uPState, uFreq, uVid );
+				g_pCpu->WritePState( uPState, uFreq, uVid );
 				uPStateConfFlag = 0;
 			}
 		}
