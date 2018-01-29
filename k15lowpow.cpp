@@ -117,6 +117,8 @@ void LoadConfig( void ){
 				g_pCpu->SetTargetLoad( u );
 			}else if( GetUintConfig( szBuf.get(), "FullpowerLoad=", u )){
 				g_pCpu->SetFullpowLoad( u );
+			}else if( GetUintConfig( szBuf.get(), "Debug=", u )){
+				g_pCpu->SetDebug( u );
 			}else{
 				GetUintConfig( szBuf.get(), "Interval=", g_uTimerInterval );
 			}
@@ -178,6 +180,15 @@ LRESULT CALLBACK WindowProc(
 	  case WM_CREATE:
 		g_hWnd = hWnd;
 		if( !Init()) PostQuitMessage( 1 );
+		
+		// Console オープン
+		if( g_pCpu->GetDebug() && AllocConsole()){
+			freopen ( "CONOUT$", "w", stdout );
+			freopen ( "CONIN$", "r", stdin );
+			
+			// ウィンドウタイトル変更
+			//SetConsoleTitle( "k15lowpow" );
+		}
 		
 	  Case WM_TIMER:
 		g_pCpu->PowerManagement();

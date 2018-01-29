@@ -25,6 +25,8 @@ CProcessor::CProcessor(){
 	m_uPerfCntBuf		= 0;
 	m_uPerfSlot			= -1;
 	m_uPStateLimit		= 0;
+	m_uDebug			= 0;
+	
 	#ifndef NO_SMOOTH_MODE
 		m_uApmMode			= APM_SMOOTH;
 	#endif
@@ -303,6 +305,7 @@ void CProcessor::PowerManagement( void ){
 	QWORD	qwTime;
 	UINT	uMaxLoad = 0;
 	UINT	u;
+	UINT	uCurState = m_uPStateLimit;
 	
 	ReadPerfCnt();
 	qwTsc = __rdtsc();
@@ -340,8 +343,28 @@ void CProcessor::PowerManagement( void ){
 			m_uPStateLimit = u - m_uBoostStateNum;
 		}
 		
+		if( GetDebug()){
+			wprintf( _T( "\n%d%c%3u" ), uCurState,
+				uCurState == m_uPStateLimit ? ' ' :
+				uCurState >  m_uPStateLimit ? '+' : '-',
+				( UINT )( uActualLoad / 10.24 + 0.5 )
+			);
+			
+			#define GRAPH_RANGE	50
+			
+			UINT uLoad = ( UINT )( uActualLoad / 10.24 + 0.5 ) / ( 100 / GRAPH_RANGE );
+			
+			for( UINT u = 0; u <= GRAPH_RANGE; ++u ){
+				putchar(
+					u == 0 || u == GRAPH_RANGE		? '|' :
+					u <= uLoad						? '*' :
+					u % ( GRAPH_RANGE / 10 ) == 0	? ( '0' + u / ( GRAPH_RANGE / 10 )) : '.'
+				);
+			}
+		}
+		
 		DebugMsgD(
-			_T( "NewP:%d Load:%.1f Act:%.1f Tgt:%.1f\n" ),
+			_T( "NewP:%d Load:%5.1f Act:%5.1f Tgt:%5.1f\n" ),
 			m_uPStateLimit,
 			uMaxLoad / 10.24, uActualLoad / 10.24,
 			uMaxLoad * GetSwPStateFreq( m_uPStateLimit ) / ( 1024 * 10.24 )

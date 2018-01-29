@@ -116,6 +116,9 @@ class CProcessor {
 	
 	UINT GetActualFreq( UINT uTgtFreq, UINT& uFid, UINT& uVid );
 	
+	void SetDebug( UINT uFlag ){ m_uDebug = uFlag; }
+	UINT GetDebug( void ){ return m_uDebug; }
+	
 	/*** utils **************************************************************/
 	
 	template <class T>
@@ -267,6 +270,7 @@ class CProcessor {
 	UINT	m_uTargetLoad;			// 目標負荷 << 10
 	UINT	m_uFullpowLoad;			// フルパワーに移行する負荷 << 10
 	UINT	m_uCurrentFreq;
+	BOOL	m_uDebug;				// debug flag
 	
 	enum {
 		APM_PSTATE,					// SwPStateLimit を使用
