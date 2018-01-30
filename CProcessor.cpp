@@ -305,7 +305,6 @@ void CProcessor::PowerManagement( void ){
 	QWORD	qwTime;
 	UINT	uMaxLoad = 0;
 	UINT	u;
-	UINT	uCurState = m_uPStateLimit;
 	
 	ReadPerfCnt();
 	qwTsc = __rdtsc();
@@ -330,25 +329,8 @@ void CProcessor::PowerManagement( void ){
 		// 現在の PStateLimit での実 load を求める
 		UINT uActualLoad = uMaxLoad * GetSwPStateFreq( m_uPStateLimit ) / 1024;
 		
-		// 95% load で P0 へ
-		if( uActualLoad > m_uFullpowLoad ){
-			m_uPStateLimit = 0;
-		}
-		
-		// 80% を超えない PState を求める
-		else{
-			for( u = m_uMaxPState - 1; u > m_uBoostStateNum; --u ){
-				if( uMaxLoad * m_puFreq[ u ] < ( m_uTargetLoad << 10 )) break;
-			}
-			m_uPStateLimit = u - m_uBoostStateNum;
-		}
-		
 		if( GetDebug()){
-			wprintf( _T( "\n%d%c%3u" ), uCurState,
-				uCurState == m_uPStateLimit ? ' ' :
-				uCurState >  m_uPStateLimit ? '+' : '-',
-				( UINT )( uActualLoad / 10.24 + 0.5 )
-			);
+			wprintf( _T( "\n%3u" ), ( UINT )( uActualLoad / 10.24 + 0.5 ));
 			
 			#define GRAPH_RANGE	50
 			
@@ -361,6 +343,23 @@ void CProcessor::PowerManagement( void ){
 					u % ( GRAPH_RANGE / 10 ) == 0	? ( '0' + u / ( GRAPH_RANGE / 10 )) : '.'
 				);
 			}
+			
+			wprintf( _T( "%2u:" ), m_uPStateLimit );
+			for( UINT u = 0; u < 8 - m_uBoostStateNum - m_uPStateLimit; ++u )
+				putchar( '*' );
+		}
+		
+		// 95% load で P0 へ
+		if( uActualLoad > m_uFullpowLoad ){
+			m_uPStateLimit = 0;
+		}
+		
+		// 80% を超えない PState を求める
+		else{
+			for( u = m_uMaxPState - 1; u > m_uBoostStateNum; --u ){
+				if( uMaxLoad * m_puFreq[ u ] < ( m_uTargetLoad << 10 )) break;
+			}
+			m_uPStateLimit = u - m_uBoostStateNum;
 		}
 		
 		DebugMsgD(
