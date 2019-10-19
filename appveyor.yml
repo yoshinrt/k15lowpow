@@ -1,0 +1,41 @@
+version: 1.0.{build}
+image: Visual Studio 2019
+
+configuration:
+  - Release
+#  - Debug
+
+platform:
+  - x64
+  - x86
+
+# set clone depth
+clone_depth: 5
+
+# see "Skip commits" at https://www.appveyor.com/docs/how-to/filtering-commits/#commit-files-github-and-bitbucket-only
+skip_commits:
+  files:
+    - '*.md'
+    - .gitignore
+    - .editorconfig
+    - 'azure-pipelines*.yml'
+    - 'ci/azure-pipelines/template*.yml'
+    - '.github/*.md'
+    - '.github/ISSUE_TEMPLATE/*.md'
+
+install:
+- ps: Start-FileDownload "https://github.com/yoshinrt/WinRing0/releases/download/1.3.0/WinRing0_1.3.0_bin.zip"
+- cmd: |
+    cd WinRing0
+    7z x ../WinRing0*.zip
+    cd ..
+    git submodule init
+    git submodule update
+
+# Build settings, not to be confused with "before_build" and "after_build".
+# "project" is relative to the original build directory and not influenced by directory changes in "before_build".
+build:
+  project: k15lowpow.sln      # path to Visual Studio solution or project
+
+artifacts:
+  - path: '*/$(configuration)/*.exe'

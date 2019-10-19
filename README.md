@@ -1,5 +1,7 @@
 k15lowpow
 ======================
+[![Build status](https://ci.appveyor.com/api/projects/status/3k9o2box08v2f72m/branch/master?svg=true)](https://ci.appveyor.com/project/YoshiNRT/k15lowpow/branch/master)
+
 AMD A シリーズプロセッサ (kaveri アーキテクチャ) 用の省電力制御ソフトです．
 
 Windows 標準の省電力制御では高くなりがちな CPU クロックをより細かく制御します．  
@@ -8,7 +10,7 @@ Windows 標準の省電力制御では高くなりがちな CPU クロックを�
 使い方
 ------
 ### コンパイル ###
-コンパイル・動作には WinRing0 のファイル一式が必要です．
+コンパイル・動作には WinRing0 のファイル一式が必要です．[こちら](https://github.com/yoshinrt/WinRing0/releases/download/1.3.0/WinRing0_1.3.0_bin.zip)からダウンロード後，WinRing0 ディレクトリに解凍してください．
  
 ### 設定 ###
 本ソフトは GUI を持っていません (^^; 設定は [k15tk](http://hbkim.blog.so-net.ne.jp/2015-01-17) を使用し，.cfg ファイルを保存してください．
